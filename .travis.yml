@@ -1,0 +1,142 @@
+language: node_js
+node_js:
+  - "8.10"
+
+deploy_service_job: &DEPLOY_SERVICE_JOB
+  cache:
+    directories:
+      - node_modules
+      - ${SERVICE_PATH}/node_modules
+
+  install:
+    - npm install -g serverless
+    - travis_retry npm install
+    - cd ${SERVICE_PATH}
+    - travis_retry npm install
+    - cd -
+
+  script:
+    - cd ${SERVICE_PATH}
+    - serverless deploy -s ${STAGE_NAME}
+    - cd -
+
+remove_service_job: &REMOVE_SERVICE_JOB
+  cache:
+    directories:
+      - node_modules
+      - ${SERVICE_PATH}/node_modules
+
+  install:
+    - npm install -g serverless
+    - travis_retry npm install
+    - cd ${SERVICE_PATH}
+    - travis_retry npm install
+    - cd -
+
+  script:
+    - cd ${SERVICE_PATH}
+    - serverless remove -s ${STAGE_NAME}
+    - cd -
+
+environments:
+  - &PRODUCTION_ENV
+    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID_PRODUCTION}
+    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY_PRODUCTION}
+
+  - &DEVELOPMENT_ENV
+    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID_DEVELOPMENT}
+    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY_DEVELOPMENT}
+
+jobs:
+  include:
+    # non-master branches deploys to stage named by the branch
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Users API"
+      if: tag !~ /^rm-stage-.* / AND type = push AND NOT branch = master
+      env:
+        - SERVICE_PATH="services/users-api"
+        - STAGE_NAME=${TRAVIS_BRANCH}
+        - *DEVELOPMENT_ENV
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Posts API"
+      if: tag !~ /^rm-stage-.* / AND type = push AND NOT branch = master
+      env:
+        - SERVICE_PATH="services/posts-api"
+        - STAGE_NAME=${TRAVIS_BRANCH}
+        - *DEVELOPMENT_ENV
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Cron Job"
+      if: tag !~ /^rm-stage-.* / AND type = push AND NOT branch = master
+      env:
+        - SERVICE_PATH="services/cron-job"
+        - STAGE_NAME=${TRAVIS_BRANCH}
+        - *DEVELOPMENT_ENV
+
+    # pull requests deploys to the 'PR#' stage
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Users API"
+      if: tag !~ /^rm-stage-.* / AND type = pull_request
+      env:
+        - SERVICE_PATH="services/users-api"
+        - STAGE_NAME=pr${TRAVIS_PULL_REQUEST}
+        - *DEVELOPMENT_ENV
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Posts API"
+      if: tag !~ /^rm-stage-.* / AND type = pull_request
+      env:
+        - SERVICE_PATH="services/posts-api"
+        - STAGE_NAME=pr${TRAVIS_PULL_REQUEST}
+        - *DEVELOPMENT_ENV
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Cron Job"
+      if: tag !~ /^rm-stage-.* / AND type = pull_request
+      env:
+        - SERVICE_PATH="services/cron-job"
+        - STAGE_NAME=pr${TRAVIS_PULL_REQUEST}
+        - *DEVELOPMENT_ENV
+
+    # master branch deploys to the 'prod' stage
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Users API"
+      if: tag !~ /^rm-stage-.* / AND type = push AND branch = master
+      env:
+        - SERVICE_PATH="services/users-api"
+        - STAGE_NAME=prod
+        - *PRODUCTION_ENV
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Posts API"
+      if: tag !~ /^rm-stage-.* / AND type = push AND branch = master
+      env:
+        - SERVICE_PATH="services/posts-api"
+        - STAGE_NAME=prod
+        - *PRODUCTION_ENV
+    - <<: *DEPLOY_SERVICE_JOB
+      name: "Deploy Cron Job"
+      if: tag !~ /^rm-stage-.* / AND type = push AND branch = master
+      env:
+        - SERVICE_PATH="services/cron-job"
+        - STAGE_NAME=prod
+        - *PRODUCTION_ENV
+
+    # remove non-production stages
+    - <<: *REMOVE_SERVICE_JOB
+      name: "Remove Users API"
+      if: tag =~ /^rm-stage-.* /
+      env:
+        - SERVICE_PATH="services/users-api"
+        - STAGE_NAME=${TRAVIS_TAG:9}
+        - *DEVELOPMENT_ENV
+    - <<: *REMOVE_SERVICE_JOB
+      name: "Remove Posts API"
+      if: tag =~ /^rm-stage-.* /
+      env:
+        - SERVICE_PATH="services/posts-api"
+        - STAGE_NAME=${TRAVIS_TAG:9}
+        - *DEVELOPMENT_ENV
+    - <<: *REMOVE_SERVICE_JOB
+      name: "Remove Cron Job"
+      if: tag =~ /^rm-stage-.* /
+      env:
+        - SERVICE_PATH="services/cron-job"
+        - STAGE_NAME=${TRAVIS_TAG:9}
+        - *DEVELOPMENT_ENV
